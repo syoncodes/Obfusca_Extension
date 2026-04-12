@@ -1,0 +1,259 @@
+/**
+ * Content script entry point for Obfusca extension.
+ * Detects the current LLM chat site and initializes the appropriate interceptor.
+ *
+ * This is a thin entry point - all site-specific logic lives in the sites/ adapters,
+ * and shared interception logic lives in core/interceptor.ts.
+ *
+ * IMPORTANT: Claude.ai uses network-level interception (network-interceptor.ts) because
+ * it ignores DOM events. Other sites use DOM-level interception here.
+ *
+ * MAIN world communication uses postMessage (CSP-compliant) instead of inline script
+ * injection, which is blocked by Claude.ai's Content Security Policy.
+ */
+
+import { detectCurrentSite } from './sites';
+import { createSiteInterceptor } from './core/interceptor';
+import { setupUniversalFileInterception, cleanupFileInterception } from './core/fileInterception';
+import { loadCustomPatternsIntoMemory } from './detection';
+import { getSession } from './auth';
+import type { SiteState } from './sites/types';
+
+/**
+ * Check if we're on Claude.ai - it uses network interception instead of DOM interception.
+ */
+function isClaudeSite(): boolean {
+  return window.location.hostname.includes('claude.ai');
+}
+
+/**
+ * Send a message to the MAIN world (network-interceptor.ts) via postMessage.
+ * CSP-compliant — no inline script injection needed.
+ */
+function sendToMainWorld(type: string, data: unknown): void {
+  window.postMessage({ source: 'obfusca-content', type, data }, '*');
+}
+
+// Current interceptor state
+let currentInterceptor: SiteState | null = null;
+
+// Protection toggle state — synced with chrome.storage.local.enabled
+let protectionEnabled = true;
+
+/**
+ * Send custom patterns to MAIN world for the network interceptor.
+ * Uses postMessage instead of inline script injection (CSP-compliant).
+ */
+function sendCustomPatternsToMainWorld(): void {
+  if (!isClaudeSite()) return;
+
+  chrome.storage.local.get(['customPatterns'], (result) => {
+    const patterns = result.customPatterns;
+    if (Array.isArray(patterns) && patterns.length > 0) {
+      console.log(`[Obfusca] Sending ${patterns.length} custom patterns to MAIN world`);
+      sendToMainWorld('custom-patterns', patterns);
+    }
+  });
+}
+
+/**
+ * Listen for custom pattern updates and re-send them to MAIN world.
+ */
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.customPatterns) {
+    const newPatterns = changes.customPatterns.newValue;
+    if (Array.isArray(newPatterns) && isClaudeSite()) {
+      console.log(`[Obfusca] Custom patterns updated, sending ${newPatterns.length} to MAIN world`);
+      sendToMainWorld('custom-patterns', newPatterns);
+    }
+  }
+});
+
+/**
+ * Set up listener for network interceptor block events (Claude only).
+ * The network interceptor dispatches 'obfusca-blocked' events when it blocks a request.
+ * This content script listens for those events to provide any additional UI feedback if needed.
+ */
+function setupNetworkBlockListener(): void {
+  console.log('[Obfusca Claude] Setting up network block event listener');
+
+  window.addEventListener('obfusca-blocked', ((event: CustomEvent) => {
+    const { reason, source } = event.detail || {};
+    console.log(`[Obfusca Claude] Received block event from ${source}: ${reason}`);
+  }) as EventListener);
+}
+
+/**
+ * Initialize the content script.
+ * Detects the current site and creates an interceptor if supported.
+ *
+ * CLAUDE HANDLING:
+ * Claude.ai uses network-level interception (network-interceptor.ts) because it ignores
+ * DOM events. For Claude, we only:
+ * - Send custom patterns to MAIN world for the network interceptor (via postMessage)
+ * - Set up listener for network block events
+ * - Set up file interception (still works via DOM)
+ *
+ * OTHER SITES:
+ * All other sites (ChatGPT, Gemini, Grok, etc.) use DOM-level interception which works
+ * correctly with preventDefault/stopPropagation.
+ */
+// Track whether interception has been initialized
+let initialized = false;
+
+async function init(): Promise<void> {
+  console.log('[Obfusca] Content script initializing...');
+  console.log('[Obfusca] Current URL:', window.location.href);
+  console.log('[Obfusca] Document readyState:', document.readyState);
+
+  // Check if protection is enabled (user toggle in popup)
+  const settings = await new Promise<Record<string, unknown>>((resolve) => {
+    chrome.storage.local.get(['enabled'], resolve);
+  });
+  protectionEnabled = settings.enabled !== false; // Default true if not set
+
+  if (!protectionEnabled) {
+    console.log('[Obfusca] Protection disabled by user toggle — skipping initialization');
+    if (isClaudeSite()) {
+      sendToMainWorld('protection-state', { enabled: false });
+    }
+    return;
+  }
+
+  // Check for authenticated session — if not signed in, do nothing
+  const session = await getSession();
+  if (!session) {
+    console.log('[Obfusca] No session — extension inactive, waiting for sign-in');
+    if (isClaudeSite()) {
+      sendToMainWorld('session-state', { active: false });
+    }
+    return;
+  }
+
+  // Prevent double-initialization
+  if (initialized) {
+    console.log('[Obfusca] Already initialized, skipping');
+    return;
+  }
+  initialized = true;
+
+  console.log('[Obfusca] Session found — activating protection');
+
+  // Load custom patterns into memory for synchronous quick checks
+  // This is also called at module load, but we call it again to ensure fresh patterns
+  loadCustomPatternsIntoMemory();
+
+  // Send custom patterns to MAIN world for network interceptor (Claude only)
+  sendCustomPatternsToMainWorld();
+
+  // Signal to MAIN world network interceptor (Claude) that session is active
+  // and protection is enabled
+  if (isClaudeSite()) {
+    sendToMainWorld('session-state', { active: true });
+    sendToMainWorld('protection-state', { enabled: true });
+  }
+
+  const siteConfig = detectCurrentSite();
+
+  if (!siteConfig) {
+    console.log('[Obfusca] Current site is not supported:', window.location.hostname);
+    return;
+  }
+
+  console.log(`[Obfusca] Site detected: ${siteConfig.name}`);
+  console.log(`[Obfusca] Host patterns:`, siteConfig.hostPatterns);
+
+  // CLAUDE: Use DOM interception with nuclear blocking (clears editor before ProseMirror reads it)
+  // The network interceptor (network-interceptor.ts) still runs as a secondary safety net
+  if (isClaudeSite()) {
+    console.log('[Obfusca Claude] Using DOM interception with nuclear blocking + network safety net');
+    setupNetworkBlockListener();
+  }
+
+  // Create DOM-level interceptor (uses nuclear blocking on Claude, standard on others)
+  console.log(`[Obfusca] Creating site interceptor for ${siteConfig.name}...`);
+  currentInterceptor = createSiteInterceptor(siteConfig);
+
+  // Set up universal file interception (works across all sites)
+  console.log('[Obfusca] Setting up universal file interception...');
+  setupUniversalFileInterception();
+
+  // Log success
+  console.log(`[Obfusca] Initialized successfully for ${siteConfig.name}`);
+  console.log('[Obfusca] Interceptor state:', {
+    inputElement: currentInterceptor.inputElement?.tagName || 'not found',
+    submitButton: currentInterceptor.submitButton?.tagName || 'not found',
+    listenersAttached: currentInterceptor.listenersAttached,
+  });
+}
+
+/**
+ * Cleanup function for when the content script is unloaded.
+ */
+function cleanup(): void {
+  console.log('[Obfusca] Content script cleanup triggered');
+  if (currentInterceptor) {
+    currentInterceptor.cleanup();
+    currentInterceptor = null;
+  }
+  // Clean up universal file interception
+  cleanupFileInterception();
+}
+
+// Handle page unload
+window.addEventListener('unload', cleanup);
+
+// Listen for session changes — activate when user signs in
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.obfusca_access_token) {
+    if (changes.obfusca_access_token.newValue && !initialized) {
+      console.log('[Obfusca] Session detected (user signed in) — initializing protection');
+      init();
+    } else if (!changes.obfusca_access_token.newValue && initialized) {
+      console.log('[Obfusca] Session removed (user signed out) — deactivating protection');
+      cleanup();
+      initialized = false;
+      if (isClaudeSite()) {
+        sendToMainWorld('session-state', { active: false });
+      }
+    }
+  }
+});
+
+// Listen for protection toggle changes from popup
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && 'enabled' in changes) {
+    const newEnabled = changes.enabled.newValue !== false;
+    console.log(`[Obfusca] Protection toggle changed: ${newEnabled}`);
+
+    if (!newEnabled && protectionEnabled) {
+      // Disabling protection — tear down all interception
+      protectionEnabled = false;
+      console.log('[Obfusca] Protection disabled — removing all interception');
+      cleanup();
+      initialized = false;
+      if (isClaudeSite()) {
+        sendToMainWorld('protection-state', { enabled: false });
+      }
+    } else if (newEnabled && !protectionEnabled) {
+      // Re-enabling protection — reinitialize
+      protectionEnabled = true;
+      console.log('[Obfusca] Protection re-enabled — reinitializing');
+      if (isClaudeSite()) {
+        sendToMainWorld('protection-state', { enabled: true });
+      }
+      if (!initialized) {
+        init();
+      }
+    }
+  }
+});
+
+// Wait for DOM to be ready
+if (document.readyState === 'loading') {
+  console.log('[Obfusca] DOM not ready, waiting for DOMContentLoaded...');
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  console.log('[Obfusca] DOM already ready, initializing immediately');
+  init();
+}

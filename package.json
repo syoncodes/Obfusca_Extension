@@ -1,0 +1,19 @@
+{
+  "name": "obfusca-extension",
+  "version": "0.1.0",
+  "description": "LLM Data Loss Prevention - Prevent sensitive data leaks to ChatGPT",
+  "type": "module",
+  "scripts": {
+    "dev": "node build.mjs --watch",
+    "build": "tsc && node build.mjs",
+    "build:vite": "vite build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.260",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12",
+    "vitest": "^1.2.2"
+  }
+}

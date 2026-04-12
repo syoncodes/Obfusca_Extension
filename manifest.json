@@ -1,0 +1,111 @@
+{
+  "manifest_version": 3,
+  "name": "Obfusca",
+  "version": "0.3.5",
+  "description": "Prevent sensitive data leaks to ChatGPT, Claude, Gemini, and other LLMs",
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "permissions": [
+    "activeTab",
+    "storage",
+    "alarms"
+  ],
+
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://claude.ai/*",
+    "https://gemini.google.com/*",
+    "https://bard.google.com/*",
+    "https://grok.com/*",
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "https://chat.deepseek.com/*",
+    "https://deepseek.com/*",
+    "https://github.com/*",
+    "https://perplexity.ai/*",
+    "https://www.perplexity.ai/*",
+    "https://copilot.microsoft.com/*",
+    "https://chat.mistral.ai/*",
+    "https://coral.cohere.com/*",
+    "https://dashboard.cohere.com/*",
+    "https://notion.so/*",
+    "https://www.notion.so/*",
+    "https://api.obfusca.ai/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["network-interceptor.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://gemini.google.com/*",
+        "https://bard.google.com/*",
+        "https://grok.com/*",
+        "https://x.com/*",
+        "https://twitter.com/*",
+        "https://github.com/*",
+        "https://perplexity.ai/*",
+        "https://www.perplexity.ai/*",
+        "https://chat.deepseek.com/*",
+        "https://deepseek.com/*",
+        "https://copilot.microsoft.com/*",
+        "https://chat.mistral.ai/*",
+        "https://coral.cohere.com/*",
+        "https://dashboard.cohere.com/*",
+        "https://notion.so/*",
+        "https://www.notion.so/*"
+      ],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Obfusca",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["onboarding/onboarding.html"],
+      "matches": ["<all_urls>"]
+    },
+    {
+      "resources": [
+        "pageScripts/reactFileRestore.js",
+        "pageScripts/geminiFileRestore.js",
+        "pageScripts/perplexityLexicalBridge.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

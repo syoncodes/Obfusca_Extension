@@ -1,0 +1,16 @@
+/**
+ * Obfusca Extension Styles
+ *
+ * NOTE: All UI components now use inline styles for consistent rendering
+ * across all sites. This file is kept for backwards compatibility with
+ * the manifest.json content_scripts configuration.
+ *
+ * See ui/styles.ts for the design system constants.
+ */
+
+/* Minimal reset for Obfusca elements */
+[id^="obfusca-"] {
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.5;
+}
