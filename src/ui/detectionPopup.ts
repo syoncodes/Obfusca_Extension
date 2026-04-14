@@ -539,12 +539,8 @@ function fireBypassEvent(
 
     // Extract the raw value from the original text if we have positions
     let value = '';
-    let context = '';
     if (originalText && typeof d.start === 'number' && typeof d.end === 'number') {
       value = originalText.slice(d.start, d.end);
-      const ctxStart = Math.max(0, d.start - 30);
-      const ctxEnd = Math.min(originalText.length, d.end + 30);
-      context = originalText.slice(ctxStart, ctxEnd);
     }
 
     // Find the corresponding mapping to get the replacement value
@@ -559,7 +555,6 @@ function fireBypassEvent(
       severity: d.severity,
       confidence: d.confidence,
       replacement: mapping?.placeholder || `[${(d.displayName || d.type).toUpperCase()}]`,
-      context,
     });
   }
 
@@ -581,7 +576,6 @@ function fireBypassEvent(
         severity: m.severity,
         confidence: 1.0,
         replacement: m.placeholder || `[${(m.display_name || m.type).toUpperCase()}]`,
-        context: '',
       });
     }
   }

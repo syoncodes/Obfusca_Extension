@@ -720,7 +720,6 @@ export interface BypassDetectionItem {
   severity: string;
   confidence: number;
   replacement?: string;
-  context?: string;
 }
 
 export interface BypassFileItem {
