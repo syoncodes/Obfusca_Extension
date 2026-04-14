@@ -32,6 +32,8 @@ import { generateProtectedText } from './protectedText';
 import { setBypassFlag } from '../core/interceptor';
 import { generateDummiesBatch, logBypassEvent, logWarnEvent, sha256Hash, getSourceFromUrl } from '../api';
 import type { BatchDetectionItem, BypassDetectionItem, BypassFileItem, BypassEventPayload, WarnEventPayload } from '../api';
+import { getSession } from '../auth';
+import { computeContentHMAC } from '../utils/contentHash';
 import { detectFileType, getGenericIcon } from './icons';
 
 // ---------------------------------------------------------------------------
@@ -539,12 +541,8 @@ function fireBypassEvent(
 
     // Extract the raw value from the original text if we have positions
     let value = '';
-    let context = '';
     if (originalText && typeof d.start === 'number' && typeof d.end === 'number') {
       value = originalText.slice(d.start, d.end);
-      const ctxStart = Math.max(0, d.start - 30);
-      const ctxEnd = Math.min(originalText.length, d.end + 30);
-      context = originalText.slice(ctxStart, ctxEnd);
     }
 
     // Find the corresponding mapping to get the replacement value
@@ -559,7 +557,6 @@ function fireBypassEvent(
       severity: d.severity,
       confidence: d.confidence,
       replacement: mapping?.placeholder || `[${(d.displayName || d.type).toUpperCase()}]`,
-      context,
     });
   }
 
@@ -581,7 +578,6 @@ function fireBypassEvent(
         severity: m.severity,
         confidence: 1.0,
         replacement: m.placeholder || `[${(m.display_name || m.type).toUpperCase()}]`,
-        context: '',
       });
     }
   }
@@ -715,9 +711,18 @@ function fireWarnEvent(
 
   const totalCount = Object.values(byType).reduce((sum, c) => sum + c, 0);
 
-  // Compute SHA-256 hash asynchronously and send
+  // Compute HMAC-SHA256 hash keyed by tenant+user (non-correlatable across tenants).
+  // Falls back to plain SHA-256 if the session is unavailable (logged-out edge case).
   const textToHash = originalText || '';
-  sha256Hash(textToHash).then((hash) => {
+  getSession().then((session) => {
+    const tenantId = session?.user?.tenantId;
+    const userId = session?.user?.id;
+    if (tenantId && userId) {
+      return computeContentHMAC(textToHash, tenantId, userId);
+    }
+    // Fallback: user has no tenant context; use plain SHA-256 (old format)
+    return sha256Hash(textToHash);
+  }).then((hash) => {
     const payload: WarnEventPayload = {
       source,
       detections_summary: {
