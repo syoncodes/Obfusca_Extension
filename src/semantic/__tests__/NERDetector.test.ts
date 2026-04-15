@@ -14,7 +14,7 @@
  *   - Edge cases (empty / short text)
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { NERDetector } from '../NERDetector.js';
 import type { SemanticDetection, SemanticEntityType } from '../types.js';
 

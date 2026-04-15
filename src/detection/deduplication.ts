@@ -11,12 +11,11 @@
  * detection fully contained inside another registers as 100% overlap.
  */
 
-import type { Detection, Severity } from '../detection';
+import type { Detection } from '../detection';
 import type {
   MergedDetection,
   NERDetection,
   SemanticDetection,
-  DetectionSource,
 } from './types';
 
 // ---------------------------------------------------------------------------
