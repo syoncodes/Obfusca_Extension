@@ -1,3 +1,4 @@
+import { detectWithNERModel } from "./nerModelBridge";
 /**
  * Fast local detection patterns for sensitive data.
  * Ported from backend/app/detection/patterns.py
@@ -16,8 +17,10 @@ export type DetectionType =
   | 'ssn'
   | 'credit_card'
   | 'aws_key'
+  | 'aws_secret'
   | 'api_key'
   | 'private_key'
+  | 'email'
   | 'custom'; // For custom tenant patterns
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
@@ -225,12 +228,15 @@ const PATTERNS: Pattern[] = [
     validator: isValidAWSKey,
   },
 
-  // Generic API Keys - sk-... (OpenAI, Stripe, etc.)
+  // Generic API Keys - sk-... (OpenAI style, hyphen separator).
+  // Stripe-style keys (sk_live_/sk_test_) use underscores and are covered by
+  // the dedicated Stripe pattern below.  The negative lookahead makes the
+  // exclusion explicit even though sk- (hyphen) can never match sk_ (underscore).
   {
     name: 'API Key (sk- prefix)',
     type: 'api_key',
     severity: 'high',
-    regex: /\b(sk-[A-Za-z0-9]{20,})\b/g,
+    regex: /\b(sk-(?!live_|test_)[A-Za-z0-9]{20,})\b/g,
     confidence: 0.95,
   },
 
@@ -245,11 +251,12 @@ const PATTERNS: Pattern[] = [
   },
 
   // Private Keys (PEM format)
+  // Matches RSA, EC, DSA, OPENSSH, ENCRYPTED, PGP, and generic PKCS#8 private keys
   {
     name: 'Private Key',
     type: 'private_key',
     severity: 'critical',
-    regex: /-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----/g,
+    regex: /-----BEGIN\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+|ENCRYPTED\s+|PGP\s+)?PRIVATE\s+KEY(?:\s+BLOCK)?-----/g,
     confidence: 0.99,
   },
 
@@ -260,6 +267,51 @@ const PATTERNS: Pattern[] = [
     severity: 'high',
     regex: /\b(ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59})\b/g,
     confidence: 0.99,
+  },
+
+  // Email addresses
+  {
+    name: 'Email Address',
+    type: 'email',
+    severity: 'low',
+    regex: /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g,
+    confidence: 0.99,
+  },
+
+  // AWS Secret Access Key (value after common key-name prefixes)
+  {
+    name: 'AWS Secret Access Key',
+    type: 'aws_secret',
+    severity: 'critical',
+    regex: /(?:aws_secret_access_key|secret_access_key|SecretAccessKey)[\s]*[=:"'][\s]*["']*([A-Za-z0-9\/+=]{20,50})/gi,
+    confidence: 0.85,
+  },
+
+  // Stripe secret/publishable/restricted keys: sk_live_*, sk_test_*, pk_live_*, pk_test_*, rk_live_*, rk_test_*
+  {
+    name: 'Stripe API Key',
+    type: 'api_key',
+    severity: 'high',
+    regex: /\b((?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{10,})\b/g,
+    confidence: 0.99,
+  },
+
+  // Bearer tokens
+  {
+    name: 'Bearer Token',
+    type: 'api_key',
+    severity: 'high',
+    regex: /[Bb]earer[\s]+([A-Za-z0-9_\-.]{20,})/g,
+    confidence: 0.85,
+  },
+
+  // Slack tokens (xoxb- bot, xoxp- user, xoxa- app, xoxr- refresh, xoxs- service)
+  {
+    name: 'Slack Token',
+    type: 'api_key',
+    severity: 'high',
+    regex: /\b(xox[baprs]-[0-9]{10,13}-[0-9]{10,13}[a-zA-Z0-9\-]*)\b/g,
+    confidence: 0.98,
   },
 ];
 
@@ -421,7 +473,16 @@ export async function detectSensitiveData(text: string): Promise<Detection[]> {
   }
 
   // Combine and dedupe detections (same position range = same detection)
-  const allDetections = [...builtInDetections, ...customDetections];
+  let nerDetections: Detection[] = [];
+  try {
+    nerDetections = await detectWithNERModel(text);
+    if (nerDetections.length > 0) {
+      console.log(`[Obfusca Detection] NER model found ${nerDetections.length} detections`);
+    }
+  } catch (err) {
+    console.log("[Obfusca Detection] NER model skipped:", err);
+  }
+  const allDetections = [...builtInDetections, ...customDetections, ...nerDetections];
 
   // Sort by start position for consistent output
   allDetections.sort((a, b) => a.start - b.start);
@@ -472,6 +533,31 @@ export function mightContainSensitiveDataSync(text: string): boolean {
 
     // Check for api_key patterns
     if (/api[_-]?key|apikey/i.test(text)) {
+      return true;
+    }
+
+    // Check for email address (@domain.tld pattern)
+    if (/\b[^\s@]+@[^\s@]+\.[a-z]{2,}/i.test(text)) {
+      return true;
+    }
+
+    // Check for Stripe key prefixes (sk_live_, sk_test_, pk_live_, pk_test_, etc.)
+    if (/(?:sk|pk|rk)_(?:live|test)_/.test(text)) {
+      return true;
+    }
+
+    // Check for Slack token prefixes (xoxb-, xoxp-, etc.)
+    if (/xox[baprs]-/.test(text)) {
+      return true;
+    }
+
+    // Check for AWS secret access key keywords
+    if (/aws_secret_access_key|secret_access_key|SecretAccessKey/i.test(text)) {
+      return true;
+    }
+
+    // Check for Bearer token pattern
+    if (/[Bb]earer\s+[A-Za-z0-9_\-.]{20,}/.test(text)) {
       return true;
     }
   }

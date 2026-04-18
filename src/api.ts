@@ -6,6 +6,9 @@
 import type { Detection } from './detection';
 import { getAccessToken, getCurrentUser, getSession } from './auth';
 import { API_URL } from './config';
+import { getLocalDummyGenerator } from './services/localDummyGenerator';
+
+const localDummyGenerator = getLocalDummyGenerator();
 
 const BACKEND_URL = API_URL;
 const ANALYZE_ENDPOINT = `${BACKEND_URL}/analyze`;
@@ -414,6 +417,15 @@ export async function analyze(
     originalAction: backendResponse.original_action,
   };
 
+  // Phase 1 local-first: override backend dummy_value with locally-generated values.
+  // Backend still returns dummy_value for backward compat but extension always prefers local.
+  if (result.obfuscation?.mappings) {
+    for (const item of result.obfuscation.mappings) {
+      const input = item.original_preview || item.masked_value || '';
+      item.dummy_value = localDummyGenerator.generate(item.type, input, item.display_name ?? undefined);
+    }
+  }
+
   console.log('[Obfusca API] analyze: Final result:', {
     shouldBlock: result.shouldBlock,
     action: result.action,
@@ -720,7 +732,6 @@ export interface BypassDetectionItem {
   severity: string;
   confidence: number;
   replacement?: string;
-  context?: string;
 }
 
 export interface BypassFileItem {
