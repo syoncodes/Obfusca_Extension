@@ -58,13 +58,20 @@ async function _doInit(): Promise<void> {
     console.log('[Obfusca NER Bridge] Initializing NER model pipeline...');
 
     try {
-      // Direct import so Vite bundles it
+      // Load ONNX runtime from bundled extension file (not Vite-bundled)
+      const ortUrl = chrome.runtime.getURL('ort.all.bundle.min.mjs');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      _ort = await import('onnxruntime-web');
-    } catch {
-      console.warn('[Obfusca NER Bridge] onnxruntime-web not available.');
+      _ort = await import(/* @vite-ignore */ ortUrl);
+    } catch (e) {
+      console.warn('[Obfusca NER Bridge] onnxruntime-web not available:', e);
       _initFailed = true;
       return;
+    }
+
+    // Set WASM paths so ONNX runtime can find the worker files
+    const wasmBase = chrome.runtime.getURL('');
+    if (_ort.env) {
+      _ort.env.wasm.wasmPaths = wasmBase;
     }
 
     const modelUrl = chrome.runtime.getURL('model/model.onnx');

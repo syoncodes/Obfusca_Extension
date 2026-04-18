@@ -105,7 +105,12 @@
         "pageScripts/geminiFileRestore.js",
         "pageScripts/perplexityLexicalBridge.js",
         "model/model.onnx",
-        "model/tokenizer/vocab.txt"
+        "model/tokenizer/vocab.txt",
+        "ort.all.bundle.min.mjs",
+        "ort-wasm-simd-threaded.mjs",
+        "ort-wasm-simd-threaded.wasm",
+        "ort-wasm-simd-threaded.jsep.mjs",
+        "ort-wasm-simd-threaded.jsep.wasm"
       ],
       "matches": ["<all_urls>"]
     }

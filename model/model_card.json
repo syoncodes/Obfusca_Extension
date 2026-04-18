@@ -1,0 +1,53 @@
+{
+  "model_id": "ner-v5",
+  "version": "1.0.0",
+  "task": "token-classification",
+  "sha256": "05d95afe7a51f7ed025c73c0f59973a4d87c5d91feec8c130987fb2132a7fac5",
+  "size_bytes": 109668776,
+  "input_format": "token_ids,attention_mask",
+  "output_format": "logits",
+  "labels": [
+    "O",
+    "B-SSN",
+    "I-SSN",
+    "B-CREDIT_CARD",
+    "I-CREDIT_CARD",
+    "B-EMAIL",
+    "I-EMAIL",
+    "B-PHONE",
+    "I-PHONE",
+    "B-AWS_KEY",
+    "I-AWS_KEY",
+    "B-AWS_SECRET",
+    "I-AWS_SECRET",
+    "B-API_KEY",
+    "I-API_KEY",
+    "B-PRIVATE_KEY",
+    "I-PRIVATE_KEY",
+    "B-JWT",
+    "I-JWT",
+    "B-CONNECTION_STR",
+    "I-CONNECTION_STR",
+    "B-PERSON",
+    "I-PERSON",
+    "B-ORG",
+    "I-ORG",
+    "B-DATE",
+    "I-DATE",
+    "B-ADDRESS",
+    "I-ADDRESS",
+    "B-MED_RECORD",
+    "I-MED_RECORD"
+  ],
+  "max_sequence_length": 512,
+  "quantization": "int8_dynamic",
+  "export_library": "optimum",
+  "onnx_opset": 17,
+  "runtime": {
+    "min_onnxruntime_web_version": "1.17.0",
+    "execution_providers": [
+      "wasm"
+    ]
+  },
+  "exported_at": "2026-04-16T05:02:42Z"
+}

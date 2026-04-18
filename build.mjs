@@ -163,6 +163,46 @@ async function main() {
       }
     }
 
+    // Copy ONNX runtime + WASM files (separate from content.js to avoid 67MB bundle)
+    const ortDist = resolve(__dirname, 'node_modules/onnxruntime-web/dist');
+    const ortFiles = [
+      'ort.all.bundle.min.mjs',
+      'ort-wasm-simd-threaded.mjs',
+      'ort-wasm-simd-threaded.wasm',
+      'ort-wasm-simd-threaded.jsep.mjs',
+      'ort-wasm-simd-threaded.jsep.wasm',
+    ];
+    for (const f of ortFiles) {
+      const src = resolve(ortDist, f);
+      if (existsSync(src)) {
+        copyFileSync(src, resolve(distDir, f));
+      }
+    }
+    console.log('  Copied ONNX runtime + WASM files');
+
+    // Copy model files if they exist in project root model/ directory
+    const modelSrcDir = resolve(__dirname, 'model');
+    if (existsSync(modelSrcDir)) {
+      const distModelDir = resolve(distDir, 'model');
+      mkdirSync(distModelDir, { recursive: true });
+      const modelFiles = ['model.onnx', 'manifest.json', 'model_card.json'];
+      for (const f of modelFiles) {
+        const src = resolve(modelSrcDir, f);
+        if (existsSync(src)) copyFileSync(src, resolve(distModelDir, f));
+      }
+      const tokDir = resolve(modelSrcDir, 'tokenizer');
+      if (existsSync(tokDir)) {
+        const distTokDir = resolve(distModelDir, 'tokenizer');
+        mkdirSync(distTokDir, { recursive: true });
+        const tokFiles = ['vocab.txt', 'tokenizer.json', 'tokenizer_config.json', 'special_tokens_map.json'];
+        for (const f of tokFiles) {
+          const src = resolve(tokDir, f);
+          if (existsSync(src)) copyFileSync(src, resolve(distTokDir, f));
+        }
+      }
+      console.log('  Copied model files');
+    }
+
     console.log('✓ Build complete!');
     console.log(`  Output: ${distDir}`);
 
