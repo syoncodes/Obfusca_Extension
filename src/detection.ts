@@ -1,3 +1,4 @@
+import { detectWithNERModel } from "./nerModelBridge";
 /**
  * Fast local detection patterns for sensitive data.
  * Ported from backend/app/detection/patterns.py
@@ -472,7 +473,16 @@ export async function detectSensitiveData(text: string): Promise<Detection[]> {
   }
 
   // Combine and dedupe detections (same position range = same detection)
-  const allDetections = [...builtInDetections, ...customDetections];
+  let nerDetections: Detection[] = [];
+  try {
+    nerDetections = await detectWithNERModel(text);
+    if (nerDetections.length > 0) {
+      console.log(`[Obfusca Detection] NER model found ${nerDetections.length} detections`);
+    }
+  } catch (err) {
+    console.log("[Obfusca Detection] NER model skipped:", err);
+  }
+  const allDetections = [...builtInDetections, ...customDetections, ...nerDetections];
 
   // Sort by start position for consistent output
   allDetections.sort((a, b) => a.start - b.start);
