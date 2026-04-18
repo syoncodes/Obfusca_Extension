@@ -7,8 +7,12 @@ import type { Detection } from './detection';
 import { getAccessToken, getCurrentUser, getSession } from './auth';
 import { API_URL } from './config';
 import { getLocalDummyGenerator } from './services/localDummyGenerator';
+import { LocalPolicyEngine } from './policies/LocalPolicyEngine';
+import { PolicyCache } from './policies/PolicyCache';
 
 const localDummyGenerator = getLocalDummyGenerator();
+const _policyEngine = new LocalPolicyEngine();
+const _policyCache = new PolicyCache();
 
 const BACKEND_URL = API_URL;
 const ANALYZE_ENDPOINT = `${BACKEND_URL}/analyze`;
@@ -20,6 +24,7 @@ const TIMEOUT_MS = 10000;
 export interface AnalyzeRequest {
   content: string;
   tenant_id?: string;
+  local_detections?: Array<{ type: string; start: number; end: number; confidence: number; display_name?: string }>;
   context?: {
     source?: string;
     url?: string;
@@ -212,6 +217,7 @@ export async function checkBackendHealth(): Promise<boolean> {
  */
 export async function analyzeWithBackend(
   text: string,
+  localDetections?: Array<{ type: string; start: number; end: number; confidence: number; display_name?: string }>,
   sourceUrl?: string
 ): Promise<AnalyzeResponse | null> {
   console.log('[Obfusca API] analyzeWithBackend: Starting backend analysis');
@@ -223,6 +229,14 @@ export async function analyzeWithBackend(
 
     // Build request body
     const body: AnalyzeRequest = { content: text };
+    if (localDetections && localDetections.length > 0) {
+      body.local_detections = localDetections;
+      console.log(`[Obfusca API] analyzeWithBackend: Sending ${localDetections.length} local NER detections as hints`);
+    }
+    if (localDetections && localDetections.length > 0) {
+      body.local_detections = localDetections;
+      console.log(`[Obfusca API] analyzeWithBackend: Sending ${localDetections.length} local NER detections as hints`);
+    }
 
     // Add source context if available
     if (sourceUrl) {
@@ -361,25 +375,64 @@ export async function analyze(
     };
   }
 
-  const backendResponse = await analyzeWithBackend(text, sourceUrl);
+  const backendResponse = await analyzeWithBackend(text, localDetections.map(d => ({ type: d.type, start: d.start, end: d.end, confidence: d.confidence, display_name: d.displayName })), sourceUrl);
 
   if (backendResponse === null) {
-    // Backend unavailable - use local detections only (GRACEFUL FALLBACK)
-    console.log('[Obfusca API] analyze: Backend unavailable, using LOCAL DETECTION ONLY');
-    const shouldBlock = localDetections.some(
-      (d) => d.severity === 'critical' || d.severity === 'high'
+    // Backend unavailable — full local pipeline with policy + dummy generation
+    console.log('[Obfusca API] analyze: Backend unavailable, running LOCAL PIPELINE');
+
+    const policy = await _policyCache.get();
+    console.log(`[Obfusca API] analyze: Policy profile=${policy.profile}, rules=${policy.rules?.length ?? 0}`);
+
+    const policyResult = _policyEngine.evaluate(
+      localDetections,
+      policy,
+      sourceUrl ? new URL(sourceUrl).hostname : undefined,
     );
-    const action: 'allow' | 'block' | 'redact' = shouldBlock ? 'block' : localDetections.length > 0 ? 'redact' : 'allow';
+
+    const action: 'allow' | 'block' | 'redact' = policyResult.action === 'warn' ? 'redact' : policyResult.action as 'allow' | 'block' | 'redact';
+    const shouldBlock = action === 'block';
+
+    let obfuscation: ObfuscationData | undefined;
+    if (localDetections.length > 0) {
+      const mappings: MappingItem[] = [];
+      let obfuscatedText = text;
+      const sorted = [...localDetections].sort((a, b) => b.start - a.start);
+      for (let idx = 0; idx < sorted.length; idx++) {
+        const det = sorted[idx];
+        const originalValue = text.slice(det.start, det.end);
+        const dummyValue = localDummyGenerator.generate(det.type, originalValue, det.displayName);
+        const maskedValue = `[${det.displayName.toUpperCase().replace(/\s+/g, '_')}]`;
+        mappings.unshift({
+          index: idx,
+          type: det.type,
+          display_name: det.displayName,
+          start: det.start,
+          end: det.end,
+          severity: det.severity,
+          dummy_value: dummyValue,
+          masked_value: maskedValue,
+          placeholder: maskedValue,
+          original_preview: originalValue.slice(0, 4) + '...',
+        });
+        obfuscatedText = obfuscatedText.slice(0, det.start) + maskedValue + obfuscatedText.slice(det.end);
+      }
+      obfuscation = { obfuscated_text: obfuscatedText, mappings };
+    }
+
     const result = {
       shouldBlock,
       action,
       detections: localDetections,
       source: 'local' as const,
+      obfuscation,
     };
-    console.log('[Obfusca API] analyze: Local-only result:', {
+    console.log('[Obfusca API] analyze: Local pipeline result:', {
       shouldBlock: result.shouldBlock,
       action: result.action,
       detectionCount: result.detections.length,
+      profile: policy.profile,
+      hasObfuscation: !!result.obfuscation,
     });
     return result;
   }
@@ -388,21 +441,8 @@ export async function analyze(
   console.log('[Obfusca API] analyze: Backend available, merging results');
   const backendDetections = backendResponse.detections.map(convertDetection);
 
-  // Merge: use backend detections as primary, add any unique local ones
+  // Backend is authoritative -- only use backend detections.
   const mergedDetections = [...backendDetections];
-
-  for (const local of localDetections) {
-    const isDuplicate = backendDetections.some(
-      (bd) =>
-        bd.type === local.type &&
-        Math.abs(bd.start - local.start) < 5 &&
-        Math.abs(bd.end - local.end) < 5
-    );
-
-    if (!isDuplicate) {
-      mergedDetections.push(local);
-    }
-  }
 
   const result = {
     shouldBlock: backendResponse.action === 'block',
