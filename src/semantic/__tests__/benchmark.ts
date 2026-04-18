@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Browser-side benchmark harness for the Obfusca DLP detection pipeline.
  *

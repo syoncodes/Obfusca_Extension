@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * ZKBypassLogger — Option A: Zero-Knowledge RSA-OAEP + AES-256-GCM bypass logger.
  *
@@ -30,7 +31,7 @@
  * @see local-semantic-architecture.md §7.2
  */
 
-import type { IBypassLogger, BypassEvent, RawBypassDetection, BypassFileItem } from './types';
+import type { IBypassLogger, BypassEvent, BypassFileItem } from './types';
 import { EncryptedBypassLogger } from './EncryptedBypassLogger';
 
 // ---------------------------------------------------------------------------

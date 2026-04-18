@@ -103,7 +103,9 @@
       "resources": [
         "pageScripts/reactFileRestore.js",
         "pageScripts/geminiFileRestore.js",
-        "pageScripts/perplexityLexicalBridge.js"
+        "pageScripts/perplexityLexicalBridge.js",
+        "model/model.onnx",
+        "model/tokenizer/vocab.txt"
       ],
       "matches": ["<all_urls>"]
     }
