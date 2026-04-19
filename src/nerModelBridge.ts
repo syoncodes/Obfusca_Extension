@@ -24,7 +24,7 @@ const NER_SEVERITY: Record<string, Severity> = {
   SSN: 'critical', CREDIT_CARD: 'critical', AWS_KEY: 'critical', AWS_SECRET: 'critical',
   PRIVATE_KEY: 'critical', API_KEY: 'high', JWT: 'high', CONNECTION_STR: 'high',
   EMAIL: 'medium', PHONE: 'medium', MED_RECORD: 'high', PERSON: 'medium',
-  ORG: 'low', DATE: 'low', ADDRESS: 'medium',
+  ORG: 'low', DATE: 'low', ADDRESS: 'medium', FINANCIAL: 'high', ID_DOC: 'critical', IP_ADDR: 'medium',
 };
 
 const NER_DISPLAY_NAMES: Record<string, string> = {
@@ -32,7 +32,7 @@ const NER_DISPLAY_NAMES: Record<string, string> = {
   PHONE: 'Phone Number', AWS_KEY: 'AWS Access Key', AWS_SECRET: 'AWS Secret Key',
   API_KEY: 'API Key / Secret', PRIVATE_KEY: 'Private Key', JWT: 'JSON Web Token',
   CONNECTION_STR: 'Database Connection String', PERSON: 'Person Name', ORG: 'Organization Name',
-  DATE: 'Date / Date of Birth', ADDRESS: 'Physical Address', MED_RECORD: 'Medical Record',
+  DATE: 'Date / Date of Birth', ADDRESS: 'Physical Address', MED_RECORD: 'Medical Record', FINANCIAL: 'Financial Information', ID_DOC: 'Identity Document', IP_ADDR: 'IP Address',
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

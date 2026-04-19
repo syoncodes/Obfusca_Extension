@@ -31,7 +31,7 @@ export const NER_LABELS: readonly string[] = [
   'B-ORG',        'I-ORG',
   'B-DATE',       'I-DATE',
   'B-ADDRESS',    'I-ADDRESS',
-  'B-MED_RECORD', 'I-MED_RECORD',
+  'B-MED_RECORD', 'I-MED_RECORD', 'B-FINANCIAL', 'I-FINANCIAL', 'B-ID_DOC', 'I-ID_DOC', 'B-IP_ADDR', 'I-IP_ADDR',
 ] as const;
 
 /**

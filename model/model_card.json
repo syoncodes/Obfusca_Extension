@@ -1,9 +1,9 @@
 {
-  "model_id": "ner-v5",
+  "model_id": "ner-v2-bert-18cat",
   "version": "1.0.0",
   "task": "token-classification",
-  "sha256": "05d95afe7a51f7ed025c73c0f59973a4d87c5d91feec8c130987fb2132a7fac5",
-  "size_bytes": 109668776,
+  "sha256": "b50a8db38c9d3475d278d4c10054ecfa8a65f5536cbbdffe1032eb59e58521b7",
+  "size_bytes": 109673409,
   "input_format": "token_ids,attention_mask",
   "output_format": "logits",
   "labels": [
@@ -37,7 +37,13 @@
     "B-ADDRESS",
     "I-ADDRESS",
     "B-MED_RECORD",
-    "I-MED_RECORD"
+    "I-MED_RECORD",
+    "B-FINANCIAL",
+    "I-FINANCIAL",
+    "B-ID_DOC",
+    "I-ID_DOC",
+    "B-IP_ADDR",
+    "I-IP_ADDR"
   ],
   "max_sequence_length": 512,
   "quantization": "int8_dynamic",
@@ -49,5 +55,5 @@
       "wasm"
     ]
   },
-  "exported_at": "2026-04-16T05:02:42Z"
+  "exported_at": "2026-04-18T21:48:02Z"
 }
