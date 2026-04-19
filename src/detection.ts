@@ -21,6 +21,17 @@ export type DetectionType =
   | 'api_key'
   | 'private_key'
   | 'email'
+  | 'phone'
+  | 'jwt'
+  | 'connection_string'
+  | 'person_name'
+  | 'organization'
+  | 'date'
+  | 'address'
+  | 'medical_record'
+  | 'financial'
+  | 'identity_document'
+  | 'ip_address'
   | 'custom'; // For custom tenant patterns
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low';

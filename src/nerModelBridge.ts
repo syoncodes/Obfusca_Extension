@@ -17,7 +17,12 @@ import type { Detection, DetectionType, Severity } from './detection';
 
 const NER_TO_DETECTION_TYPE: Record<string, DetectionType> = {
   SSN: 'ssn', CREDIT_CARD: 'credit_card', EMAIL: 'email',
-  AWS_KEY: 'aws_key', AWS_SECRET: 'aws_secret', API_KEY: 'api_key', PRIVATE_KEY: 'private_key',
+  AWS_KEY: 'aws_key', AWS_SECRET: 'aws_secret', API_KEY: 'api_key',
+  PRIVATE_KEY: 'private_key', PHONE: 'phone', JWT: 'jwt',
+  CONNECTION_STR: 'connection_string', PERSON: 'person_name',
+  ORG: 'organization', DATE: 'date', ADDRESS: 'address',
+  MED_RECORD: 'medical_record', FINANCIAL: 'financial',
+  ID_DOC: 'identity_document', IP_ADDR: 'ip_address',
 };
 
 const NER_SEVERITY: Record<string, Severity> = {

@@ -138,6 +138,14 @@ function convertDetection(backend: BackendDetection): Detection {
     phone: 'Phone Number',
     jwt: 'JWT Token',
     connection_string: 'Connection String',
+    person_name: 'Person Name',
+    organization: 'Organization',
+    date: 'Date / Date of Birth',
+    address: 'Physical Address',
+    medical_record: 'Medical Record',
+    financial: 'Financial Information',
+    identity_document: 'Identity Document',
+    ip_address: 'IP Address',
   };
 
   return {
