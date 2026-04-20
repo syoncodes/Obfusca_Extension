@@ -1,5 +1,6 @@
 import { detectWithNERModel } from "./nerModelBridge";
 import { applyContextProximityScoring } from "./contextProximityScorer";
+import { applyContextClassification } from "./contextClassifier";
 /**
  * Fast local detection patterns for sensitive data.
  * Ported from backend/app/detection/patterns.py
@@ -500,8 +501,13 @@ export async function detectSensitiveData(text: string): Promise<Detection[]> {
   // Adjusts confidence based on nearby keywords and catches detections NER missed
   const scoredDetections = applyContextProximityScoring(text, allDetections);
 
-  console.log(`[Obfusca Detection] detectSensitiveData: Found ${scoredDetections.length} total detections (after Layer 2 context scoring)`);
-  return scoredDetections;
+
+  // Layer 3: Context Classification (for ambiguous detections)
+  // Only runs on detections with confidence 0.4-0.8 after Layer 2
+  const finalDetections = await applyContextClassification(text, scoredDetections);
+
+  console.log(`[Obfusca Detection] detectSensitiveData: Found ${finalDetections.length} total detections (after Layer 3 context classification)`);
+  return finalDetections;
 }
 
 /**

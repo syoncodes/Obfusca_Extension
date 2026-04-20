@@ -105,6 +105,7 @@
         "pageScripts/geminiFileRestore.js",
         "pageScripts/perplexityLexicalBridge.js",
         "model/model.onnx",
+        "model/context_classifier.onnx",
         "model/tokenizer/vocab.txt",
         "ort.all.bundle.min.mjs",
         "ort-wasm-simd-threaded.mjs",
