@@ -106,7 +106,6 @@ export async function detectWithWebLLM(text: string): Promise<Detection[]> {
         { role: 'user', content: text },
       ],
       temperature: 0.1,
-      max_tokens: 500,
       
     });
 
@@ -145,8 +144,25 @@ export async function detectWithWebLLM(text: string): Promise<Detection[]> {
         try {
           parsed = { detections: JSON.parse(arrMatch[0]) };
         } catch {
-          console.log('[Obfusca WebLLM] Array extraction also failed');
-          return [];
+          console.log('[Obfusca WebLLM] Array extraction failed, trying regex');
+          const items: any[] = [];
+          const re = /\{[^}]*?["'](?:type|t(?:ype)?)["']\s*:\s*["']([^"']+)["'][^}]*?["'](?:value|v(?:alue)?)["']\s*:\s*["']([^"']*)["'][^}]*?\}/g;
+          let rm;
+          while ((rm = re.exec(cleaned)) !== null) {
+            items.push({ type: rm[1], value: rm[2] });
+          }
+          if (items.length === 0) {
+            const re2 = /\{[^}]*?["'](?:value|v(?:alue)?)["']\s*:\s*["']([^"']*)["'][^}]*?["'](?:type|t(?:ype)?)["']\s*:\s*["']([^"']+)["'][^}]*?\}/g;
+            while ((rm = re2.exec(cleaned)) !== null) {
+              items.push({ type: rm[2], value: rm[1] });
+            }
+          }
+          if (items.length > 0) {
+            console.log('[Obfusca WebLLM] Regex extracted ' + items.length + ' items');
+            parsed = { detections: items };
+          } else {
+            return [];
+          }
         }
       } else {
         return [];
