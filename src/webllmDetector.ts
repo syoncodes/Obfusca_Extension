@@ -106,7 +106,7 @@ export async function detectWithWebLLM(text: string): Promise<Detection[]> {
         { role: 'user', content: text },
       ],
       temperature: 0.1,
-      
+      max_tokens: 2048,
     });
 
     const elapsed = performance.now() - startTime;

@@ -486,23 +486,47 @@ export async function detectSensitiveData(text: string): Promise<Detection[]> {
     // Continue without custom pattern detections on error
   }
 
-  // Try WebLLM first (replaces NER + Layer 2 + Layer 3)
+  // Always run Layer 2 context scoring (regex + proximity patterns)
+  // This catches: salary amounts, addresses, medical phrases, person names with titles
+  const allLocal = [...builtInDetections, ...customDetections];
+
+  // Try WebLLM for contextual detection (names, ambiguous PII)
   let webllmAvailable = false;
   try {
     webllmAvailable = await isWebGPUAvailable();
   } catch { }
 
   if (webllmAvailable) {
-    console.log('[Obfusca Detection] Using WebLLM for contextual detection');
+    console.log('[Obfusca Detection] Using WebLLM + Layer 2 hybrid');
     try {
       const webllmDetections = await detectWithWebLLM(text);
       if (webllmDetections.length > 0) {
         console.log(`[Obfusca Detection] WebLLM found ${webllmDetections.length} detections`);
       }
-      const allWllm = [...builtInDetections, ...customDetections, ...webllmDetections];
-      allWllm.sort((a, b) => a.start - b.start);
-      console.log(`[Obfusca Detection] detectSensitiveData: Found ${allWllm.length} total detections (WebLLM path)`);
-      return allWllm;
+
+      // Also run NER + Layer 2 for structured patterns WebLLM might miss
+      let nerDetections: Detection[] = [];
+      try {
+        nerDetections = await detectWithNERModel(text);
+      } catch { }
+      const nerAndL2 = applyContextProximityScoring(text, [...allLocal, ...nerDetections]);
+
+      // Merge WebLLM + NER/L2, deduplicate by position overlap
+      const merged = [...nerAndL2];
+      for (const wd of webllmDetections) {
+        const overlaps = merged.some(
+          (d) => (wd.start >= d.start && wd.start < d.end) ||
+                 (wd.end > d.start && wd.end <= d.end) ||
+                 (wd.start <= d.start && wd.end >= d.end),
+        );
+        if (!overlaps) merged.push(wd);
+      }
+
+      // Run Layer 3 on ambiguous detections
+      const finalDetections = await applyContextClassification(text, merged);
+      finalDetections.sort((a, b) => a.start - b.start);
+      console.log(`[Obfusca Detection] detectSensitiveData: Found ${finalDetections.length} total detections (WebLLM hybrid path)`);
+      return finalDetections;
     } catch (err) {
       console.log('[Obfusca Detection] WebLLM failed, falling back to NER pipeline:', err);
     }
