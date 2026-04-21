@@ -15,7 +15,7 @@ let _engine: any = null;
 let _initializing = false;
 let _available: boolean | null = null;
 
-const MODEL_ID = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
+const MODEL_ID = 'Qwen2.5-3B-Instruct-q4f16_1-MLC';
 
 const SYSTEM_PROMPT = `You are a PII classification API. Given text, return a JSON array of sensitive items found.
 
