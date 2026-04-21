@@ -76,6 +76,16 @@ export async function initWebLLM(
           onProgress({ text: report.text, progress: report.progress || 0 });
         }
       },
+      appConfig: {
+        model_list: [{
+          model_id: MODEL_ID,
+          model: 'https://huggingface.co/mlc-ai/Qwen2.5-3B-Instruct-q4f16_1-MLC',
+          model_lib: 'https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/v0_2_80/Qwen2.5-3B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
+          overrides: {
+            context_window_size: 16384,
+          },
+        }],
+      },
     });
 
     console.log('[Obfusca WebLLM] Engine ready');
