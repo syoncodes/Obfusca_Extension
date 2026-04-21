@@ -1,4 +1,5 @@
 import { detectWithNERModel } from "./nerModelBridge";
+import { detectWithWebLLM, isWebGPUAvailable } from "./webllmDetector";
 import { applyContextProximityScoring } from "./contextProximityScorer";
 import { applyContextClassification } from "./contextClassifier";
 /**
@@ -485,7 +486,30 @@ export async function detectSensitiveData(text: string): Promise<Detection[]> {
     // Continue without custom pattern detections on error
   }
 
-  // Combine and dedupe detections (same position range = same detection)
+  // Try WebLLM first (replaces NER + Layer 2 + Layer 3)
+  let webllmAvailable = false;
+  try {
+    webllmAvailable = await isWebGPUAvailable();
+  } catch { }
+
+  if (webllmAvailable) {
+    console.log('[Obfusca Detection] Using WebLLM for contextual detection');
+    try {
+      const webllmDetections = await detectWithWebLLM(text);
+      if (webllmDetections.length > 0) {
+        console.log(`[Obfusca Detection] WebLLM found ${webllmDetections.length} detections`);
+      }
+      const allWllm = [...builtInDetections, ...customDetections, ...webllmDetections];
+      allWllm.sort((a, b) => a.start - b.start);
+      console.log(`[Obfusca Detection] detectSensitiveData: Found ${allWllm.length} total detections (WebLLM path)`);
+      return allWllm;
+    } catch (err) {
+      console.log('[Obfusca Detection] WebLLM failed, falling back to NER pipeline:', err);
+    }
+  }
+
+  // Fallback: NER + Layer 2 + Layer 3 (for systems without WebGPU)
+  console.log('[Obfusca Detection] Using NER fallback pipeline');
   let nerDetections: Detection[] = [];
   try {
     nerDetections = await detectWithNERModel(text);
@@ -496,17 +520,9 @@ export async function detectSensitiveData(text: string): Promise<Detection[]> {
     console.log("[Obfusca Detection] NER model skipped:", err);
   }
   const allDetections = [...builtInDetections, ...customDetections, ...nerDetections];
-
-  // Layer 2: Context Proximity Scoring
-  // Adjusts confidence based on nearby keywords and catches detections NER missed
   const scoredDetections = applyContextProximityScoring(text, allDetections);
-
-
-  // Layer 3: Context Classification (for ambiguous detections)
-  // Only runs on detections with confidence 0.4-0.8 after Layer 2
   const finalDetections = await applyContextClassification(text, scoredDetections);
-
-  console.log(`[Obfusca Detection] detectSensitiveData: Found ${finalDetections.length} total detections (after Layer 3 context classification)`);
+  console.log(`[Obfusca Detection] detectSensitiveData: Found ${finalDetections.length} total detections (NER fallback path)`);
   return finalDetections;
 }
 
