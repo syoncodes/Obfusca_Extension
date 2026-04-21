@@ -327,6 +327,46 @@ const PATTERNS: Pattern[] = [
     regex: /\b(xox[baprs]-[0-9]{10,13}-[0-9]{10,13}[a-zA-Z0-9\-]*)\b/g,
     confidence: 0.98,
   },
+  // Phone numbers (US formats)
+  {
+    name: 'Phone Number',
+    type: 'phone',
+    severity: 'medium',
+    regex: /\b(\+?1?[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})\b/g,
+    confidence: 0.85,
+  },
+  // IP addresses (IPv4)
+  {
+    name: 'IP Address',
+    type: 'ip_address',
+    severity: 'medium',
+    regex: /\b((?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))\b/g,
+    confidence: 0.90,
+  },
+  // Database connection strings
+  {
+    name: 'Database Connection String',
+    type: 'connection_string',
+    severity: 'critical',
+    regex: /(?:(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|mssql):\/\/[^\s'"]+)/gi,
+    confidence: 0.95,
+  },
+  // JWT tokens
+  {
+    name: 'JWT Token',
+    type: 'jwt',
+    severity: 'high',
+    regex: /\b(eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b/g,
+    confidence: 0.98,
+  },
+  // Generic secrets in key=value format
+  {
+    name: 'Secret in Config',
+    type: 'api_key',
+    severity: 'high',
+    regex: /(?:password|passwd|secret|token|auth)[\s]*[=:][\s]*["']?([^\s"']{8,64})["']?/gi,
+    confidence: 0.75,
+  },
 ];
 
 /**
