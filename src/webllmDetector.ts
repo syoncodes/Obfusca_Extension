@@ -200,6 +200,7 @@ export async function detectWithWebLLM(text: string): Promise<Detection[]> {
       ip_address: 'ip_address' as DetectionType,
       credential: 'api_key' as DetectionType,
       organization: 'organization' as DetectionType,
+      org: 'organization' as DetectionType,
     };
 
     const SEVERITY_MAP: Record<string, Severity> = {
@@ -260,6 +261,26 @@ export async function detectWithWebLLM(text: string): Promise<Detection[]> {
         end,
         confidence: 0.92,
       });
+    }
+
+    // Post-process: fix common WebLLM mislabels
+    for (const det of detections) {
+      const val = text.substring(det.start, det.end).toLowerCase();
+      // Blood pressure, A1C, vitals, medication dosages are medical, not financial
+      if (det.type === ('financial' as DetectionType) || det.type === ('person_name' as DetectionType)) {
+        if (/^\d{2,3}\/\d{2,3}$/.test(val) || /^\d+\.\d+%$/.test(val) ||
+            /^\d+mg$/i.test(val) || /metformin|aspirin|insulin|lisinopril|amoxicillin|ibuprofen/i.test(val) ||
+            /^[a-z]{2,3}-?\d{4,}$/i.test(val)) {
+          det.type = 'medical_record' as DetectionType;
+          det.displayName = 'Medical Record';
+          det.severity = 'high' as Severity;
+        }
+      }
+      // Standalone numbers that look like MRN/policy numbers, not financial
+      if (det.type === ('financial' as DetectionType) && /^[A-Z]{0,3}\d{5,}$/i.test(val)) {
+        det.type = 'medical_record' as DetectionType;
+        det.displayName = 'Medical Record';
+      }
     }
 
     console.log(`[Obfusca WebLLM] Found ${detections.length} detections in ${elapsed.toFixed(0)}ms`);
