@@ -367,6 +367,14 @@ const PATTERNS: Pattern[] = [
     regex: /(?:password|passwd|secret|token|auth)[\s]*[=:][\s]*["']?([^\s"']{8,64})["']?/gi,
     confidence: 0.75,
   },
+  // Date patterns (various formats)
+  {
+    name: 'Date',
+    type: 'date',
+    severity: 'medium',
+    regex: /\b(?:(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}|\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})\b/gi,
+    confidence: 0.70,
+  },
 ];
 
 /**

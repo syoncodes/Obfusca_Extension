@@ -139,6 +139,20 @@ async function init(): Promise<void> {
 
   console.log('[Obfusca] Session found — activating protection');
 
+  // Pre-load WebLLM model in background so it's ready for first submit
+  (async () => {
+    try {
+      const { isWebGPUAvailable, initWebLLM } = await import('./webllmDetector');
+      if (await isWebGPUAvailable()) {
+        console.log('[Obfusca] Pre-loading WebLLM model in background...');
+        await initWebLLM();
+        console.log('[Obfusca] WebLLM model pre-loaded and ready');
+      }
+    } catch (err) {
+      console.log('[Obfusca] WebLLM pre-load skipped:', err);
+    }
+  })();
+
   // Load custom patterns into memory for synchronous quick checks
   // This is also called at module load, but we call it again to ensure fresh patterns
   loadCustomPatternsIntoMemory();
