@@ -702,8 +702,11 @@ export function createSiteInterceptor(config: SiteConfig): SiteState {
     return finalElement;
   }
 
-  /** Safety timeout: auto-reset isAnalyzing after 15s to prevent stuck state */
-  const ANALYSIS_TIMEOUT_MS = 15_000;
+  /** Safety timeout: auto-reset isAnalyzing after 45s to prevent stuck state.
+   * WebLLM model load (5s) + shader compilation (1s) + inference (7s) +
+   * NER load (2s) + Layer 3 (1s) + backend round-trip (2s) = ~18s typical.
+   * First-ever run with model download can take 60s+. */
+  const ANALYSIS_TIMEOUT_MS = 45_000;
   let analysisTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   function startAnalysisTimeout(): void {
