@@ -154,6 +154,38 @@ const CONTEXT_PATTERNS: ContextPattern[] = [
     severity: 'medium' as Severity,
     confidence: 0.82,
   },
+  {
+    valuePattern: /\b(?:Dr|Mr|Mrs|Ms|Prof|Rev|Sr|Jr)\.?\s+[A-Z][a-z]{1,20}(?:\s+[A-Z][a-z]{1,20}){1,2}\b/g,
+    contextKeywords: [
+      'patient', 'client', 'employee', 'applicant', 'meeting',
+      'schedule', 'appointment', 'referred', 'contact', 'resident',
+      'beneficiary', 'spouse', 'guardian', 'account holder',
+      'policyholder', 'subscriber', 'cardholder', 'dependent',
+      'diagnosed', 'prescribed', 'treatment', 'record', 'dob',
+      'ssn', 'passport', 'license', 'address', 'phone',
+    ],
+    maxDistance: 200,
+    type: 'person_name' as DetectionType,
+    displayName: 'Person Name',
+    severity: 'medium' as Severity,
+    confidence: 0.90,
+  },
+  {
+    valuePattern: /\b[A-Z][a-z]{1,20}\s+[A-Z][a-z]{1,20}\b/g,
+    contextKeywords: [
+      'patient', 'client', 'employee', 'applicant', 'meeting with',
+      'schedule', 'appointment', 'referred by', 'emergency contact',
+      'next of kin', 'guardian', 'beneficiary', 'diagnosed',
+      'prescribed', 'treatment', 'dob', 'date of birth', 'ssn',
+      'social security', 'passport', 'mrn', 'medical record',
+      'account holder', 'policyholder', 'her patient', 'his patient',
+    ],
+    maxDistance: 150,
+    type: 'person_name' as DetectionType,
+    displayName: 'Person Name',
+    severity: 'medium' as Severity,
+    confidence: 0.85,
+  },
 ];
 
 // -- Core scoring functions --
