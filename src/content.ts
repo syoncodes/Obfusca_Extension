@@ -148,8 +148,19 @@ async function init(): Promise<void> {
         await initWebLLM();
         console.log('[Obfusca] WebLLM model pre-loaded and ready');
       }
+      // Also pre-load NER and Layer 3 models
+      try {
+        const { detectWithNERModel } = await import('./nerModelBridge');
+        await detectWithNERModel('preload warmup');
+        console.log('[Obfusca] NER model pre-loaded');
+      } catch {}
+      try {
+        const { applyContextClassification } = await import('./contextClassifier');
+        await applyContextClassification('preload warmup', []);
+        console.log('[Obfusca] Layer 3 classifier pre-loaded');
+      } catch {}
     } catch (err) {
-      console.log('[Obfusca] WebLLM pre-load skipped:', err);
+      console.log('[Obfusca] Model pre-load skipped:', err);
     }
   })();
 
