@@ -17,13 +17,22 @@ let _available: boolean | null = null;
 
 const MODEL_ID = 'Qwen2.5-3B-Instruct-q4f16_1-MLC';
 
-const SYSTEM_PROMPT = `You are a PII classification API. Given text, return a JSON array of sensitive items found.
-
-Format: [{"type":"name","value":"Dr. Sarah Chen"},{"type":"money","value":"$185,000"}]
-
-Types: name, money, medical, id_doc, addr, dob, ip
-
-Return ONLY the JSON array.`;
+const FALLBACK_PROMPT = 'You are a PII classification API. Given text, return a JSON array. Format: [{"type":"name","value":"Dr. Sarah Chen"}] Types: name, money, medical, id_doc, addr, dob, ip. Return ONLY JSON.';
+let _cachedRulePrompt: string | null = null;
+let _cachedRuleHash = '';
+async function getSystemPrompt(): Promise<string> {
+  try {
+    const storage = await chrome.storage.local.get(['semanticRules']);
+    const rules = Array.isArray(storage.semanticRules) ? storage.semanticRules.filter((r: any) => r.enabled) : [];
+    if (rules.length === 0) return FALLBACK_PROMPT;
+    const ruleHash = rules.map((r: any) => r.name).sort().join(',');
+    if (_cachedRulePrompt && ruleHash === _cachedRuleHash) return _cachedRulePrompt;
+    const ruleNames = [...new Set(rules.map((r: any) => r.name))];
+    _cachedRulePrompt = 'You are a DLP scanner. Find ALL sensitive info. Return JSON array: [{"type":"LABEL","value":"text"}]. Use ONLY these labels: ' + ruleNames.join(', ') + '. Rules: Full Legal Name=real human names ONLY not job titles. Income/Salary Information=currency amounts. Home Address=street addresses. Workplace/Employer=company names AND job titles. Medical Conditions=diagnoses vitals labs. Personal Email Address=emails. Personal Phone Number=phones. Passwords & Credentials=passwords API keys tokens. Skip non-sensitive items. Return ONLY JSON array.';
+    _cachedRuleHash = ruleHash;
+    return _cachedRulePrompt;
+  } catch { return FALLBACK_PROMPT; }
+}
 
 /**
  * Check if WebGPU is available in this browser.
@@ -110,9 +119,10 @@ export async function detectWithWebLLM(text: string): Promise<Detection[]> {
   try {
     const startTime = performance.now();
 
+    const systemPrompt = await getSystemPrompt();
     const response = await _engine.chat.completions.create({
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: text },
       ],
       temperature: 0.1,
@@ -181,26 +191,43 @@ export async function detectWithWebLLM(text: string): Promise<Detection[]> {
     const rawDetections = Array.isArray(parsed) ? parsed : (parsed.detections || parsed.d || parsed.results || []);
 
     const TYPE_MAP: Record<string, DetectionType> = {
+      // Short type names from default prompt
       name: 'person_name' as DetectionType,
-      person_name: 'person_name' as DetectionType,
       money: 'financial' as DetectionType,
-      financial: 'financial' as DetectionType,
       medical: 'medical_record' as DetectionType,
-      medical_record: 'medical_record' as DetectionType,
-      medical_condition: 'medical_record' as DetectionType,
       id_doc: 'identity_document' as DetectionType,
-      identity_document: 'identity_document' as DetectionType,
       addr: 'address' as DetectionType,
-      address: 'address' as DetectionType,
+      dob: 'date' as DetectionType,
+      ip: 'ip_address' as DetectionType,
       phone: 'phone' as DetectionType,
       email: 'email' as DetectionType,
-      dob: 'date' as DetectionType,
-      date_of_birth: 'date' as DetectionType,
-      ip: 'ip_address' as DetectionType,
-      ip_address: 'ip_address' as DetectionType,
-      credential: 'api_key' as DetectionType,
-      organization: 'organization' as DetectionType,
       org: 'organization' as DetectionType,
+      ssn: 'ssn' as DetectionType,
+      credential: 'api_key' as DetectionType,
+      // Dashboard rule names (from rule-aware prompt)
+      'Full Legal Name': 'person_name' as DetectionType,
+      'Income/Salary Information': 'financial' as DetectionType,
+      'Medical Conditions': 'medical_record' as DetectionType,
+      'Medical Record Numbers': 'medical_record' as DetectionType,
+      'Health Insurance Information': 'medical_record' as DetectionType,
+      'Medications': 'medical_record' as DetectionType,
+      'Passport Number': 'identity_document' as DetectionType,
+      "Driver's License Number": 'identity_document' as DetectionType,
+      'Social Security Number': 'ssn' as DetectionType,
+      'Home Address': 'address' as DetectionType,
+      'Current Location': 'address' as DetectionType,
+      'Personal Phone Number': 'phone' as DetectionType,
+      'Personal Email Address': 'email' as DetectionType,
+      'IP Address': 'ip_address' as DetectionType,
+      'Workplace/Employer': 'organization' as DetectionType,
+      'Date of Birth': 'date' as DetectionType,
+      'Passwords & Credentials': 'api_key' as DetectionType,
+      'Credit Card Number': 'credit_card' as DetectionType,
+      'Bank Account Number': 'financial' as DetectionType,
+      'Tax Information': 'financial' as DetectionType,
+      'Family Member Names': 'person_name' as DetectionType,
+      "Children's Information": 'person_name' as DetectionType,
+      'Username/Account Names': 'email' as DetectionType,
     };
 
     const SEVERITY_MAP: Record<string, Severity> = {
@@ -239,6 +266,30 @@ export async function detectWithWebLLM(text: string): Promise<Detection[]> {
       api_key: 'Passwords & Credentials',
       jwt: 'Passwords & Credentials',
       connection_string: 'Passwords & Credentials',
+      // Rule names pass through as-is
+      'Full Legal Name': 'Full Legal Name',
+      'Income/Salary Information': 'Income/Salary Information',
+      'Medical Conditions': 'Medical Conditions',
+      'Medical Record Numbers': 'Medical Record Numbers',
+      'Health Insurance Information': 'Health Insurance Information',
+      'Passport Number': 'Passport Number',
+      "Driver's License Number": "Driver's License Number",
+      'Social Security Number': 'Social Security Number',
+      'Home Address': 'Home Address',
+      'Personal Phone Number': 'Personal Phone Number',
+      'Personal Email Address': 'Personal Email Address',
+      'IP Address': 'IP Address',
+      'Workplace/Employer': 'Workplace/Employer',
+      'Date of Birth': 'Date of Birth',
+      'Passwords & Credentials': 'Passwords & Credentials',
+      'Credit Card Number': 'Credit Card Number',
+      'Bank Account Number': 'Bank Account Number',
+      'Tax Information': 'Tax Information',
+      'Family Member Names': 'Family Member Names',
+      "Children's Information": "Children's Information",
+      'Current Location': 'Current Location',
+      'Username/Account Names': 'Username/Account Names',
+      'Medications': 'Medications',
     };
 
     const detections: Detection[] = [];
@@ -314,7 +365,8 @@ export async function validateDetectionLabels(
   text: string,
   detections: Detection[]
 ): Promise<Detection[]> {
-  if (!_engine || detections.length === 0) return detections;
+  // Validation merged into detection prompt — skip second LLM call
+  return detections;
 
   // Load the tenant's semantic rules to build a dynamic validation prompt
   let ruleNames: string[] = [];

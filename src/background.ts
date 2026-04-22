@@ -122,6 +122,36 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 // Message handler for content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
+    case 'SET_BADGE': {
+      const { status, tabId } = message;
+      const colors: Record<string, string> = {
+        ready: '#22C55E',
+        loading: '#F59E0B',
+        error: '#EF4444',
+        disabled: '#9CA3AF',
+        noauth: '#EF4444',
+      };
+      const color = colors[status] || '#9CA3AF';
+      // Draw a tiny dot as the icon badge overlay
+      const canvas = new OffscreenCanvas(16, 16);
+      const ctx = canvas.getContext('2d')!;
+      ctx.clearRect(0, 0, 16, 16);
+      ctx.beginPath();
+      ctx.arc(12, 4, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = '#1a1a2e';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // We can't overlay on the icon directly with badge, so use small text
+      chrome.action.setBadgeBackgroundColor({ color, tabId });
+      chrome.action.setBadgeText({ text: ' ', tabId });
+      if (status === 'disabled') {
+        chrome.action.setBadgeText({ text: '', tabId });
+      }
+      sendResponse({ success: true });
+      break;
+    }
     case 'GET_SETTINGS':
       chrome.storage.local.get(['enabled', 'failMode', 'localDetectionOnly'], (settings) => {
         sendResponse(settings);

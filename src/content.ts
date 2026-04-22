@@ -102,6 +102,50 @@ function setupNetworkBlockListener(): void {
 let initialized = false;
 
 async function init(): Promise<void> {
+
+// Badge status helper
+function setBadge(status: 'ready' | 'loading' | 'error' | 'disabled' | 'noauth') {
+  try { chrome.runtime.sendMessage({ type: 'SET_BADGE', status }); } catch {}
+}
+
+// Loading overlay - matches analysis indicator style
+function showLoadingOverlay() {
+  if (document.getElementById('obfusca-loading-overlay')) return;
+  const input = document.querySelector('#prompt-textarea, [contenteditable="true"], textarea');
+  const container = input ? input.closest('form, [class*="composer"], [class*="input"]') || input : null;
+  const rect = container?.getBoundingClientRect();
+  const overlay = document.createElement('div');
+  overlay.id = 'obfusca-loading-overlay';
+  const bottomPos = rect ? (window.innerHeight - rect.top + 8) : 80;
+  const leftPos = rect && rect.width >= 400 ? rect.left : 0;
+  const width = rect && rect.width >= 400 ? rect.width : 750;
+  const useTransform = !(rect && rect.width >= 400);
+  overlay.style.cssText = 'position:fixed;'
+    + 'bottom:' + bottomPos + 'px;'
+    + 'left:' + (useTransform ? '50%' : leftPos + 'px') + ';'
+    + 'width:' + width + 'px;'
+    + 'max-width:calc(100vw - 32px);'
+    + 'transform:' + (useTransform ? 'translateX(-50%)' : 'none') + ';'
+    + 'background:#0a0a0a;border:1px solid #222;border-radius:16px;'
+    + 'padding:14px 20px;z-index:2147483646;display:flex;align-items:center;gap:10px;'
+    + 'box-shadow:0 -4px 24px rgba(0,0,0,0.3);font-family:-apple-system,BlinkMacSystemFont,sans-serif;';
+  const shield = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>';
+  const spinner = '<div style="width:14px;height:14px;border:2px solid #333;border-top:2px solid #666;border-radius:50%;animation:obfusca-spin 0.8s linear infinite;flex-shrink:0;"></div>';
+  const style = '<style>@keyframes obfusca-spin{to{transform:rotate(360deg)}}</style>';
+  overlay.innerHTML = '<div style="flex-shrink:0;display:flex;align-items:center;">' + shield + '</div>'
+    + '<span id="obfusca-loading-text" style="color:#666;font-size:12px;flex:1;">Initializing protection...</span>'
+    + spinner + style;
+  document.body?.appendChild(overlay);
+}
+function updateLoadingText(text: string) {
+  const el = document.getElementById('obfusca-loading-text');
+  if (el) el.textContent = text;
+}
+function hideLoadingOverlay() {
+  const el = document.getElementById('obfusca-loading-overlay');
+  if (el) el.remove();
+}
+
   console.log('[Obfusca] Content script initializing...');
   console.log('[Obfusca] Current URL:', window.location.href);
   console.log('[Obfusca] Document readyState:', document.readyState);
@@ -124,6 +168,7 @@ async function init(): Promise<void> {
   const session = await getSession();
   if (!session) {
     console.log('[Obfusca] No session — extension inactive, waiting for sign-in');
+  setBadge('noauth');
     if (isClaudeSite()) {
       sendToMainWorld('session-state', { active: false });
     }
@@ -138,6 +183,8 @@ async function init(): Promise<void> {
   initialized = true;
 
   console.log('[Obfusca] Session found — activating protection');
+  setBadge('loading');
+  showLoadingOverlay();
 
   // Pre-load WebLLM model in background so it's ready for first submit
   (async () => {
@@ -145,19 +192,25 @@ async function init(): Promise<void> {
       const { isWebGPUAvailable, initWebLLM } = await import('./webllmDetector');
       if (await isWebGPUAvailable()) {
         console.log('[Obfusca] Pre-loading WebLLM model in background...');
+        updateLoadingText('Loading AI model...');
         await initWebLLM();
         console.log('[Obfusca] WebLLM model pre-loaded and ready');
+        updateLoadingText('Loading NER model...');
       }
       // Also pre-load NER and Layer 3 models
       try {
         const { detectWithNERModel } = await import('./nerModelBridge');
         await detectWithNERModel('preload warmup');
         console.log('[Obfusca] NER model pre-loaded');
+        updateLoadingText('Loading classifier...');
       } catch {}
       try {
         const { applyContextClassification } = await import('./contextClassifier');
         await applyContextClassification('preload warmup', []);
         console.log('[Obfusca] Layer 3 classifier pre-loaded');
+        updateLoadingText('Protection active!');
+        setBadge('ready');
+        setTimeout(hideLoadingOverlay, 1500);
       } catch {}
     } catch (err) {
       console.log('[Obfusca] Model pre-load skipped:', err);
@@ -189,7 +242,31 @@ async function init(): Promise<void> {
       console.log('[Obfusca] Semantic rules sync error:', err);
     }
   })();
-
+  // Sync semantic rules from backend for LLM validation layer
+  (async () => {
+    try {
+      const storage = await chrome.storage.local.get(['obfusca_access_token']);
+      const token = storage.obfusca_access_token;
+      if (!token) {
+        console.log('[Obfusca] No access token for semantic rules sync');
+        return;
+      }
+      console.log('[Obfusca] Fetching semantic rules from backend...');
+      const resp = await fetch('https://api.obfusca.ai/semantic-rules', {
+        headers: { 'Authorization': 'Bearer ' + token },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const rules = data.rules || [];
+        await chrome.storage.local.set({ semanticRules: rules });
+        console.log('[Obfusca] Synced ' + rules.length + ' semantic rules from backend');
+      } else {
+        console.log('[Obfusca] Semantic rules sync failed: ' + resp.status);
+      }
+    } catch (err) {
+      console.log('[Obfusca] Semantic rules sync error:', err);
+    }
+  })();
   // Load custom patterns into memory for synchronous quick checks
   // This is also called at module load, but we call it again to ensure fresh patterns
   loadCustomPatternsIntoMemory();
