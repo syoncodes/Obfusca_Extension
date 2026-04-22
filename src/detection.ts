@@ -206,7 +206,7 @@ function isValidAWSKey(key: string): boolean {
 const PATTERNS: Pattern[] = [
   // SSN: XXX-XX-XXXX format (with various separators)
   {
-    name: 'US Social Security Number',
+    name: 'Social Security Number',
     type: 'ssn',
     severity: 'critical',
     regex: /\b(\d{3}[-.\s]?\d{2}[-.\s]?\d{4})\b/g,
@@ -234,7 +234,7 @@ const PATTERNS: Pattern[] = [
 
   // AWS Access Key ID
   {
-    name: 'AWS Access Key',
+    name: 'Passwords & Credentials',
     type: 'aws_key',
     severity: 'critical',
     regex: /\b((?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16})\b/g,
@@ -247,7 +247,7 @@ const PATTERNS: Pattern[] = [
   // the dedicated Stripe pattern below.  The negative lookahead makes the
   // exclusion explicit even though sk- (hyphen) can never match sk_ (underscore).
   {
-    name: 'API Key (sk- prefix)',
+    name: 'Passwords & Credentials',
     type: 'api_key',
     severity: 'high',
     regex: /\b(sk-(?!live_|test_)[A-Za-z0-9]{20,})\b/g,
@@ -256,7 +256,7 @@ const PATTERNS: Pattern[] = [
 
   // Generic api_key= or apikey= patterns
   {
-    name: 'API Key (generic)',
+    name: 'Passwords & Credentials',
     type: 'api_key',
     severity: 'high',
     regex:
@@ -267,7 +267,7 @@ const PATTERNS: Pattern[] = [
   // Private Keys (PEM format)
   // Matches RSA, EC, DSA, OPENSSH, ENCRYPTED, PGP, and generic PKCS#8 private keys
   {
-    name: 'Private Key',
+    name: 'Passwords & Credentials',
     type: 'private_key',
     severity: 'critical',
     regex: /-----BEGIN\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+|ENCRYPTED\s+|PGP\s+)?PRIVATE\s+KEY(?:\s+BLOCK)?-----/g,
@@ -276,7 +276,7 @@ const PATTERNS: Pattern[] = [
 
   // GitHub Personal Access Token
   {
-    name: 'GitHub Token',
+    name: 'Passwords & Credentials',
     type: 'api_key',
     severity: 'high',
     regex: /\b(ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59})\b/g,
@@ -285,7 +285,7 @@ const PATTERNS: Pattern[] = [
 
   // Email addresses
   {
-    name: 'Email Address',
+    name: 'Personal Email Address',
     type: 'email',
     severity: 'low',
     regex: /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g,
@@ -294,7 +294,7 @@ const PATTERNS: Pattern[] = [
 
   // AWS Secret Access Key (value after common key-name prefixes)
   {
-    name: 'AWS Secret Access Key',
+    name: 'Passwords & Credentials',
     type: 'aws_secret',
     severity: 'critical',
     regex: /(?:aws_secret_access_key|secret_access_key|SecretAccessKey)[\s]*[=:"'][\s]*["']*([A-Za-z0-9\/+=]{20,50})/gi,
@@ -303,7 +303,7 @@ const PATTERNS: Pattern[] = [
 
   // Stripe secret/publishable/restricted keys: sk_live_*, sk_test_*, pk_live_*, pk_test_*, rk_live_*, rk_test_*
   {
-    name: 'Stripe API Key',
+    name: 'Passwords & Credentials',
     type: 'api_key',
     severity: 'high',
     regex: /\b((?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{10,})\b/g,
@@ -312,7 +312,7 @@ const PATTERNS: Pattern[] = [
 
   // Bearer tokens
   {
-    name: 'Bearer Token',
+    name: 'Passwords & Credentials',
     type: 'api_key',
     severity: 'high',
     regex: /[Bb]earer[\s]+([A-Za-z0-9_\-.]{20,})/g,
@@ -321,7 +321,7 @@ const PATTERNS: Pattern[] = [
 
   // Slack tokens (xoxb- bot, xoxp- user, xoxa- app, xoxr- refresh, xoxs- service)
   {
-    name: 'Slack Token',
+    name: 'Passwords & Credentials',
     type: 'api_key',
     severity: 'high',
     regex: /\b(xox[baprs]-[0-9]{10,13}-[0-9]{10,13}[a-zA-Z0-9\-]*)\b/g,
@@ -329,7 +329,7 @@ const PATTERNS: Pattern[] = [
   },
   // Phone numbers (US formats)
   {
-    name: 'Phone Number',
+    name: 'Personal Phone Number',
     type: 'phone',
     severity: 'medium',
     regex: /\b(\+?1?[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})\b/g,
@@ -345,7 +345,7 @@ const PATTERNS: Pattern[] = [
   },
   // Database connection strings
   {
-    name: 'Database Connection String',
+    name: 'Passwords & Credentials',
     type: 'connection_string',
     severity: 'critical',
     regex: /(?:(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|mssql):\/\/[^\s'"]+)/gi,
@@ -353,7 +353,7 @@ const PATTERNS: Pattern[] = [
   },
   // JWT tokens
   {
-    name: 'JWT Token',
+    name: 'Passwords & Credentials',
     type: 'jwt',
     severity: 'high',
     regex: /\b(eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b/g,
@@ -361,7 +361,7 @@ const PATTERNS: Pattern[] = [
   },
   // Generic secrets in key=value format
   {
-    name: 'Secret in Config',
+    name: 'Passwords & Credentials',
     type: 'api_key',
     severity: 'high',
     regex: /(?:password|passwd|secret|token|auth)[\s]*[=:][\s]*["']?([^\s"']{8,64})["']?/gi,
@@ -369,7 +369,7 @@ const PATTERNS: Pattern[] = [
   },
   // Date patterns (various formats)
   {
-    name: 'Date',
+    name: 'Date of Birth',
     type: 'date',
     severity: 'medium',
     regex: /\b(?:(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}|\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})\b/gi,

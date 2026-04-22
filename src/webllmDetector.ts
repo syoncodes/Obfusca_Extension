@@ -219,18 +219,26 @@ export async function detectWithWebLLM(text: string): Promise<Detection[]> {
     };
 
     const DISPLAY_NAMES: Record<string, string> = {
-      person_name: 'Person Name',
-      financial: 'Financial Information',
-      medical_record: 'Medical Record',
-      medical_condition: 'Medical Condition',
-      identity_document: 'Identity Document',
-      address: 'Physical Address',
-      phone: 'Phone Number',
-      email: 'Email Address',
+      person_name: 'Full Legal Name',
+      financial: 'Income/Salary Information',
+      medical_record: 'Medical Record Numbers',
+      medical_condition: 'Medical Conditions',
+      identity_document: 'Passport Number',
+      address: 'Home Address',
+      phone: 'Personal Phone Number',
+      email: 'Personal Email Address',
+      date: 'Date of Birth',
       date_of_birth: 'Date of Birth',
       ip_address: 'IP Address',
-      credential: 'Credential / Secret',
-      organization: 'Organization Name',
+      credential: 'Passwords & Credentials',
+      organization: 'Workplace/Employer',
+      ssn: 'Social Security Number',
+      credit_card: 'Credit Card Number',
+      aws_key: 'Passwords & Credentials',
+      aws_secret: 'Passwords & Credentials',
+      api_key: 'Passwords & Credentials',
+      jwt: 'Passwords & Credentials',
+      connection_string: 'Passwords & Credentials',
     };
 
     const detections: Detection[] = [];
