@@ -1,5 +1,5 @@
 import { detectWithNERModel } from "./nerModelBridge";
-import { detectWithWebLLM, isWebGPUAvailable } from "./webllmDetector";
+import { detectWithWebLLM, isWebGPUAvailable, validateDetectionLabels } from "./webllmDetector";
 import { applyContextProximityScoring } from "./contextProximityScorer";
 import { applyContextClassification } from "./contextClassifier";
 /**
@@ -571,7 +571,11 @@ export async function detectSensitiveData(text: string): Promise<Detection[]> {
       }
 
       // Run Layer 3 on ambiguous detections
-      const finalDetections = await applyContextClassification(text, merged);
+      const classifiedDetections = await applyContextClassification(text, merged);
+      // Layer 6: LLM-powered label validation — corrects mislabeled detections
+      console.log(`[Obfusca Detection] Running LLM label validation on ${classifiedDetections.length} detections`);
+      const finalDetections = await validateDetectionLabels(text, classifiedDetections);
+      console.log(`[Obfusca Detection] After validation: ${finalDetections.length} detections`);
       finalDetections.sort((a, b) => a.start - b.start);
       console.log(`[Obfusca Detection] detectSensitiveData: Found ${finalDetections.length} total detections (WebLLM hybrid path)`);
       return finalDetections;

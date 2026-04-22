@@ -305,3 +305,163 @@ export async function detectWithWebLLM(text: string): Promise<Detection[]> {
 export function isWebLLMReady(): boolean {
   return _engine !== null;
 }
+
+/**
+ * Use WebLLM to validate and correct detection labels.
+ * Dynamically builds validation prompt from the tenant's actual dashboard rules.
+ */
+export async function validateDetectionLabels(
+  text: string,
+  detections: Detection[]
+): Promise<Detection[]> {
+  if (!_engine || detections.length === 0) return detections;
+
+  // Load the tenant's semantic rules to build a dynamic validation prompt
+  let ruleNames: string[] = [];
+  try {
+    const rulesRaw = await new Promise<any[]>((resolve) => {
+      chrome.storage.local.get(['semanticRules'], (result) => {
+        const rules = Array.isArray(result.semanticRules) ? result.semanticRules.filter((r: any) => r.enabled) : [];
+        console.log(`[Obfusca WebLLM] Loaded ${rules.length} semantic rules for validation`);
+        resolve(rules);
+      });
+    });
+    ruleNames = rulesRaw.map((r: any) => r.name);
+  } catch (err) {
+    console.log('[Obfusca WebLLM] Failed to load semantic rules:', err);
+    return detections;
+  }
+
+  if (ruleNames.length === 0) {
+    console.log('[Obfusca WebLLM] No semantic rules found, skipping validation');
+    return detections;
+  }
+
+  // Build a compact list of detections for the model to review
+  const items = detections.map((d, i) => ({
+    i,
+    label: d.displayName,
+    value: text.substring(d.start, d.end).substring(0, 60),
+  }));
+
+  // Build dynamic rule list from dashboard
+  const ruleList = [...new Set(ruleNames)].join(', ');
+
+  const VALIDATE_PROMPT = `You are a data classification validator for a DLP system. The organization has these active detection rules:
+${ruleList}
+
+Review each detected item below. For each item, verify the "label" matches the correct rule from the list above.
+Return a JSON array of corrections: [{"i":INDEX,"label":"CORRECT_RULE_NAME"}]
+Only include items that need correction. If all labels are correct, return [].
+
+CRITICAL: Be CONSERVATIVE. When in doubt, KEEP the detection — do NOT drop it.
+Only use "drop" for items that are CLEARLY not sensitive: job titles (Senior Engineer), document headers (Candidate Assessment), common words.
+
+NEVER drop: email addresses (contain @), phone numbers (digits with dashes/parens), dates (MM/DD/YYYY), real person names (First Last), currency amounts ($X), street addresses, SSNs, credit cards, medical records, passwords.
+
+Only correct labels that are WRONG. If unsure, leave the item unchanged (do not include it in corrections array).
+
+Items to review:
+${JSON.stringify(items)}`;
+
+  try {
+    const response = await _engine.chat.completions.create({
+      messages: [
+        { role: 'system', content: VALIDATE_PROMPT },
+        { role: 'user', content: 'Validate and return corrections as JSON array.' },
+      ],
+      temperature: 0.1,
+      max_tokens: 800,
+    });
+
+    const output = response.choices[0]?.message?.content || '[]';
+    console.log('[Obfusca WebLLM] Validation output:', output.substring(0, 200));
+
+    // Parse corrections
+    let corrections: any[] = [];
+    try {
+      const cleaned = output.replace(/\`\`\`json?/g, '').replace(/\`\`\`/g, '').trim();
+      // Try parsing as array first
+      const bracket = cleaned.indexOf('[');
+      if (bracket !== -1) {
+        const lastBracket = cleaned.lastIndexOf(']');
+        if (lastBracket !== -1) {
+          corrections = JSON.parse(cleaned.substring(bracket, lastBracket + 1));
+        }
+      }
+    } catch {
+      // Regex fallback
+      const re = /\{"i"\s*:\s*(\d+)\s*,\s*"label"\s*:\s*"([^"]+)"\s*\}/g;
+      let m;
+      while ((m = re.exec(output)) !== null) {
+        corrections.push({ i: parseInt(m[1]), label: m[2] });
+      }
+    }
+
+    if (!Array.isArray(corrections) || corrections.length === 0) {
+      console.log('[Obfusca WebLLM] No label corrections needed');
+      return detections;
+    }
+
+    // Build reverse lookup: rule name -> DetectionType + severity
+    const RULE_TO_TYPE: Record<string, { type: DetectionType; severity: Severity }> = {
+      'Full Legal Name': { type: 'person_name' as DetectionType, severity: 'medium' as Severity },
+      'Income/Salary Information': { type: 'financial' as DetectionType, severity: 'high' as Severity },
+      'Medical Conditions': { type: 'medical_record' as DetectionType, severity: 'high' as Severity },
+      'Medical Record Numbers': { type: 'medical_record' as DetectionType, severity: 'high' as Severity },
+      'Health Insurance Information': { type: 'medical_record' as DetectionType, severity: 'high' as Severity },
+      'Medications': { type: 'medical_record' as DetectionType, severity: 'medium' as Severity },
+      'Passport Number': { type: 'identity_document' as DetectionType, severity: 'critical' as Severity },
+      "Driver's License Number": { type: 'identity_document' as DetectionType, severity: 'critical' as Severity },
+      'Social Security Number': { type: 'ssn' as DetectionType, severity: 'critical' as Severity },
+      'Home Address': { type: 'address' as DetectionType, severity: 'medium' as Severity },
+      'Personal Phone Number': { type: 'phone' as DetectionType, severity: 'medium' as Severity },
+      'Personal Email Address': { type: 'email' as DetectionType, severity: 'low' as Severity },
+      'IP Address': { type: 'ip_address' as DetectionType, severity: 'medium' as Severity },
+      'Workplace/Employer': { type: 'organization' as DetectionType, severity: 'medium' as Severity },
+      'Date of Birth': { type: 'date' as DetectionType, severity: 'medium' as Severity },
+      'Passwords & Credentials': { type: 'api_key' as DetectionType, severity: 'critical' as Severity },
+      'Credit Card Number': { type: 'credit_card' as DetectionType, severity: 'critical' as Severity },
+      'Bank Account Number': { type: 'financial' as DetectionType, severity: 'critical' as Severity },
+      'Tax Information': { type: 'financial' as DetectionType, severity: 'critical' as Severity },
+      'Family Member Names': { type: 'person_name' as DetectionType, severity: 'medium' as Severity },
+      "Children's Information": { type: 'person_name' as DetectionType, severity: 'high' as Severity },
+      'Current Location': { type: 'address' as DetectionType, severity: 'medium' as Severity },
+      'Username/Account Names': { type: 'email' as DetectionType, severity: 'medium' as Severity },
+      'Sensitive Personal Beliefs': { type: 'custom' as DetectionType, severity: 'medium' as Severity },
+    };
+
+    let correctionCount = 0;
+    let dropCount = 0;
+    for (const c of corrections) {
+      const idx = c.i;
+      const newLabel = c.label;
+      if (typeof idx !== 'number' || idx < 0 || idx >= detections.length) continue;
+
+      if (newLabel === 'drop' || newLabel === 'none' || newLabel === 'false_positive' || newLabel === 'not_pii') {
+        detections[idx].confidence = 0;
+        dropCount++;
+        console.log(`[Obfusca WebLLM] Dropping #${idx} (${detections[idx].displayName}: "${text.substring(detections[idx].start, detections[idx].end).substring(0, 30)}")`);
+        continue;
+      }
+
+      const mapping = RULE_TO_TYPE[newLabel];
+      if (mapping) {
+        const oldLabel = detections[idx].displayName;
+        detections[idx].type = mapping.type;
+        detections[idx].displayName = newLabel;
+        detections[idx].severity = mapping.severity;
+        correctionCount++;
+        console.log(`[Obfusca WebLLM] Relabeled #${idx}: "${oldLabel}" → "${newLabel}"`);
+      }
+    }
+
+    const result = detections.filter(d => d.confidence > 0);
+    console.log(`[Obfusca WebLLM] Validation: ${correctionCount} relabeled, ${dropCount} dropped, ${result.length} final`);
+    return result;
+
+  } catch (err) {
+    console.log('[Obfusca WebLLM] Validation failed, keeping original labels:', err);
+    return detections;
+  }
+}

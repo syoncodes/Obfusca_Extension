@@ -164,6 +164,32 @@ async function init(): Promise<void> {
     }
   })();
 
+  // Sync semantic rules from backend for LLM validation layer
+  (async () => {
+    try {
+      const storage = await chrome.storage.local.get(['obfusca_access_token']);
+      const token = storage.obfusca_access_token;
+      if (!token) {
+        console.log('[Obfusca] No access token for semantic rules sync');
+        return;
+      }
+      console.log('[Obfusca] Fetching semantic rules from backend...');
+      const resp = await fetch('https://api.obfusca.ai/semantic-rules', {
+        headers: { 'Authorization': 'Bearer ' + token },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const rules = data.rules || [];
+        await chrome.storage.local.set({ semanticRules: rules });
+        console.log('[Obfusca] Synced ' + rules.length + ' semantic rules from backend');
+      } else {
+        console.log('[Obfusca] Semantic rules sync failed: ' + resp.status);
+      }
+    } catch (err) {
+      console.log('[Obfusca] Semantic rules sync error:', err);
+    }
+  })();
+
   // Load custom patterns into memory for synchronous quick checks
   // This is also called at module load, but we call it again to ensure fresh patterns
   loadCustomPatternsIntoMemory();
