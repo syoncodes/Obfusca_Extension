@@ -19,17 +19,15 @@ const MODEL_ID = 'Qwen2.5-3B-Instruct-q4f16_1-MLC';
 
 const FALLBACK_PROMPT = 'You are a PII classification API. Given text, return a JSON array. Format: [{"type":"name","value":"Dr. Sarah Chen"}] Types: name, money, medical, id_doc, addr, dob, ip. Return ONLY JSON.';
 let _cachedRulePrompt: string | null = null;
-let _cachedRuleHash = '';
 async function getSystemPrompt(): Promise<string> {
+  // Return cached prompt immediately if available
+  if (_cachedRulePrompt) return _cachedRulePrompt;
   try {
     const storage = await chrome.storage.local.get(['semanticRules']);
     const rules = Array.isArray(storage.semanticRules) ? storage.semanticRules.filter((r: any) => r.enabled) : [];
     if (rules.length === 0) return FALLBACK_PROMPT;
-    const ruleHash = rules.map((r: any) => r.name).sort().join(',');
-    if (_cachedRulePrompt && ruleHash === _cachedRuleHash) return _cachedRulePrompt;
     const ruleNames = [...new Set(rules.map((r: any) => r.name))];
     _cachedRulePrompt = 'You are a DLP scanner. Find ALL sensitive info. Return JSON array: [{"type":"LABEL","value":"text"}]. Use ONLY these labels: ' + ruleNames.join(', ') + '. Rules: Full Legal Name=real human names ONLY not job titles. Income/Salary Information=currency amounts. Home Address=street addresses. Workplace/Employer=company names AND job titles. Medical Conditions=diagnoses vitals labs. Personal Email Address=emails. Personal Phone Number=phones. Passwords & Credentials=passwords API keys tokens. Skip non-sensitive items. Return ONLY JSON array.';
-    _cachedRuleHash = ruleHash;
     return _cachedRulePrompt;
   } catch { return FALLBACK_PROMPT; }
 }

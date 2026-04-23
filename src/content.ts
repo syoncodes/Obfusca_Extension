@@ -235,6 +235,11 @@ function hideLoadingOverlay() {
         const rules = data.rules || [];
         await chrome.storage.local.set({ semanticRules: rules });
         console.log('[Obfusca] Synced ' + rules.length + ' semantic rules from backend');
+        // Pre-warm the system prompt cache
+        try {
+          const wllm = await import('./webllmDetector');
+          if (wllm.isWebGPUAvailable) await wllm.isWebGPUAvailable();
+        } catch {}
       } else {
         console.log('[Obfusca] Semantic rules sync failed: ' + resp.status);
       }
