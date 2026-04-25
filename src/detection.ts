@@ -547,7 +547,9 @@ export async function detectSensitiveData(text: string): Promise<Detection[]> {
   if (webllmAvailable) {
     console.log('[Obfusca Detection] Using WebLLM + Layer 2 hybrid');
     try {
+      const _pipeStart = performance.now();
       const webllmDetections = await detectWithWebLLM(text);
+      console.log(`[Obfusca Timing] WebLLM+NER: ${(performance.now()-_pipeStart).toFixed(0)}ms`);
       if (webllmDetections.length > 0) {
         console.log(`[Obfusca Detection] WebLLM found ${webllmDetections.length} detections`);
       }
@@ -571,12 +573,15 @@ export async function detectSensitiveData(text: string): Promise<Detection[]> {
       }
 
       // Run Layer 3 on ambiguous detections
-      const classifiedDetections = await applyContextClassification(text, merged);
+      // Skip L3 — WebLLM rule-aware prompt handles classification directly
+      const classifiedDetections = merged;
+      console.log('[Obfusca Timing] L3: skipped (WebLLM handles classification)');
       // Layer 6: LLM-powered label validation — corrects mislabeled detections
       console.log(`[Obfusca Detection] Running LLM label validation on ${classifiedDetections.length} detections`);
       const finalDetections = await validateDetectionLabels(text, classifiedDetections);
       console.log(`[Obfusca Detection] After validation: ${finalDetections.length} detections`);
       finalDetections.sort((a, b) => a.start - b.start);
+      console.log(`[Obfusca Timing] TOTAL pipeline: ${(performance.now()-_pipeStart).toFixed(0)}ms`);
       console.log(`[Obfusca Detection] detectSensitiveData: Found ${finalDetections.length} total detections (WebLLM hybrid path)`);
       return finalDetections;
     } catch (err) {
