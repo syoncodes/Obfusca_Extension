@@ -1,3 +1,4 @@
 node_modules/
 dist/
 model/model.onnx
+obfusca-chrome-store.zip

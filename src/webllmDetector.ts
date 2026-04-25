@@ -124,7 +124,8 @@ export async function detectWithWebLLM(text: string): Promise<Detection[]> {
         { role: 'user', content: text },
       ],
       temperature: 0.1,
-      max_tokens: 2048,
+      max_tokens: 512,
+      stop: ['}]', '\n\n'],
     });
 
     const elapsed = performance.now() - startTime;
