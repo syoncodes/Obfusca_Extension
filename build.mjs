@@ -185,7 +185,7 @@ async function main() {
     if (existsSync(modelSrcDir)) {
       const distModelDir = resolve(distDir, 'model');
       mkdirSync(distModelDir, { recursive: true });
-      const modelFiles = ['model.onnx', 'manifest.json', 'model_card.json'];
+      const modelFiles = ['model.onnx', 'model_manifest.json', 'model_card.json'];
       for (const f of modelFiles) {
         const src = resolve(modelSrcDir, f);
         if (existsSync(src)) copyFileSync(src, resolve(distModelDir, f));
